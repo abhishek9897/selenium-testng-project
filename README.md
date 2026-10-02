@@ -122,8 +122,7 @@ all Before/After annotations (Suite, Test, Class, Method), and parallel executio
 ### From the terminal
 
 ```bash
-mvn clean test                          # run everything (Chrome windows open)
-mvn clean test -Dheadless=true          # run everything without a browser window
+mvn clean test                          # run everything
 mvn clean test -Dgroups=smoke           # only the 4 smoke tests
 mvn clean test -Dgroups=regression      # all tests in the regression group
 mvn test -Dtest=LoginTest               # one class
@@ -243,8 +242,7 @@ headless=false
 ```
 
 If the URL or password changes, edit **one line here** instead of every test.
-`headless=false` shows the Chrome window; `true` runs Chrome invisibly
-(or pass `-Dheadless=true` on the command line without editing the file).
+`headless=false` shows the Chrome window; change it to `true` to run Chrome invisibly (no window).
 
 ### 8.2 `BaseTest.java` – open and close the browser
 
@@ -260,7 +258,7 @@ It uses all 8 TestNG setup/teardown annotations:
 | `@BeforeSuite` | **Once**, before everything | Loads `config.properties` into a `static` field shared by all classes |
 | `@BeforeTest` | Once per `<test>` tag in the XML | Prints which `<test>` is starting |
 | `@BeforeClass` | Once per test class | Prints the class name |
-| `@BeforeMethod` | **Before each** `@Test` | Sets Chrome options → opens Chrome → opens saucedemo.com |
+| `@BeforeMethod` | **Before each** `@Test` | Opens Chrome (guest mode, maximized, headless if set) → opens saucedemo.com |
 | `@AfterMethod` | **After each** `@Test` (even if it failed) | `driver.quit()` – closes Chrome |
 | `@AfterClass` | Once per test class | Prints the class name |
 | `@AfterTest` | Once per `<test>` tag | Prints which `<test>` finished |
@@ -271,8 +269,8 @@ Only `@BeforeSuite`, `@BeforeMethod` and `@AfterMethod` do real work. The others
 
 Details worth knowing:
 
-- **Password-manager settings** – Chrome shows a "password found in a data breach" pop-up after logging in
-  with `secret_sauce`. These Chrome preferences turn it off so it doesn't cover the page.
+- **`--guest`** – Chrome starts in guest mode (no saved passwords), so its "change your password"
+  pop-up does not appear after logging in with the demo password.
 - **`alwaysRun = true`** on all 8 methods – setup methods have no group, so without this, running
   `-Dgroups=smoke` would skip setup, Chrome would never open, and every test would crash.
 - **`ITestContext`** and **`Method`** parameters – TestNG fills these in automatically; they are used only to

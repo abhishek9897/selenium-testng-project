@@ -12,7 +12,8 @@ public class ProductsTest extends BaseTest {
 
     @Test(description = "Products page is displayed after successful login", groups = {"smoke", "regression"})
     public void productsPageIsDisplayedTest() {
-        new LoginPage(driver).login(config.getProperty("username"), config.getProperty("password"));
+        LoginPage loginPage = new LoginPage(driver);
+        loginPage.login(config.getProperty("username"), config.getProperty("password"));
 
         ProductsPage productsPage = new ProductsPage(driver);
         Assert.assertEquals(productsPage.getPageTitle(), "Products");
@@ -21,7 +22,8 @@ public class ProductsTest extends BaseTest {
 
     @Test(description = "Every product shows a name and a price", groups = {"regression"})
     public void productsHaveNamesAndPricesTest() {
-        new LoginPage(driver).login(config.getProperty("username"), config.getProperty("password"));
+        LoginPage loginPage = new LoginPage(driver);
+        loginPage.login(config.getProperty("username"), config.getProperty("password"));
 
         ProductsPage productsPage = new ProductsPage(driver);
         int productCount = productsPage.getProductCount();
@@ -43,7 +45,8 @@ public class ProductsTest extends BaseTest {
     @Test(description = "User can add a product to the cart", groups = {"smoke", "regression"},
             dependsOnMethods = "productsPageIsDisplayedTest")
     public void addProductToCartTest() {
-        new LoginPage(driver).login(config.getProperty("username"), config.getProperty("password"));
+        LoginPage loginPage = new LoginPage(driver);
+        loginPage.login(config.getProperty("username"), config.getProperty("password"));
 
         ProductsPage productsPage = new ProductsPage(driver);
         productsPage.addProductToCart("Sauce Labs Backpack");

@@ -16,8 +16,6 @@ import org.testng.annotations.BeforeTest;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Method;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Properties;
 
 // alwaysRun = true on every setup/teardown method makes them run even when
@@ -59,24 +57,15 @@ public class BaseTest {
 
         ChromeOptions options = new ChromeOptions();
 
-        // Turn off Chrome's password manager so its "save password" / "password breach"
-        // pop-ups do not appear on top of the page after login.
-        Map<String, Object> prefs = new HashMap<>();
-        prefs.put("credentials_enable_service", false);
-        prefs.put("profile.password_manager_enabled", false);
-        prefs.put("profile.password_manager_leak_detection", false);
-        options.setExperimentalOption("prefs", prefs);
+        // Guest mode has no saved passwords, so Chrome's "change your password" pop-up does not appear
+        options.addArguments("--guest");
 
-        // A -Dheadless=true value on the command line overrides config.properties
-        boolean headless = Boolean.parseBoolean(
-                System.getProperty("headless", config.getProperty("headless")));
-        if (headless) {
+        if (config.getProperty("headless").equals("true")) {
             options.addArguments("--headless=new");
         }
-        options.addArguments("--window-size=1920,1080");
 
-        // Selenium Manager (built into Selenium 4.6+) finds or downloads the matching ChromeDriver
         driver = new ChromeDriver(options);
+        driver.manage().window().maximize();
         driver.get(config.getProperty("baseUrl"));
     }
 

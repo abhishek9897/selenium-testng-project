@@ -15,7 +15,8 @@ public class CartTest extends BaseTest {
     public void cartShowsCorrectProductTest() {
         String productName = "Sauce Labs Backpack";
 
-        new LoginPage(driver).login(config.getProperty("username"), config.getProperty("password"));
+        LoginPage loginPage = new LoginPage(driver);
+        loginPage.login(config.getProperty("username"), config.getProperty("password"));
 
         ProductsPage productsPage = new ProductsPage(driver);
         productsPage.addProductToCart(productName);
