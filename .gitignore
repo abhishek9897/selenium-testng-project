@@ -4,6 +4,9 @@ target/
 # TestNG reports generated when running from the IDE
 test-output/
 
+# Screenshots taken when a test fails
+screenshots/
+
 # IDE files
 .idea/
 *.iml

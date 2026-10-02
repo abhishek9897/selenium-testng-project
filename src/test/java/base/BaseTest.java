@@ -19,7 +19,7 @@ import java.lang.reflect.Method;
 import java.util.Properties;
 
 // alwaysRun = true on every setup/teardown method makes them run even when
-// tests are filtered by groups (for example in testng-smoke.xml)
+// tests are filtered by groups (for example mvn test -Dgroups=smoke)
 public class BaseTest {
 
     // Each test class gets its own BaseTest object, so each class has its own driver.
@@ -90,6 +90,11 @@ public class BaseTest {
     @AfterSuite(alwaysRun = true)
     public void afterSuite() {
         log("After Suite  : all tests finished");
+    }
+
+    // Used by TestListener to take a screenshot when a test fails
+    public WebDriver getDriver() {
+        return driver;
     }
 
     // Prints the thread name too, so you can see tests running in parallel

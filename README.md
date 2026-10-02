@@ -77,6 +77,10 @@ selenium-testng-project/
     │   │   └── BaseTest.java            Opens Chrome before each test, closes it after
     │   ├── data/
     │   │   └── LoginDataProvider.java   Test data for invalid logins
+    │   ├── listeners/
+    │   │   ├── TestListener.java        Logs test events, screenshot on failure
+    │   │   ├── RetryAnalyzer.java       Re-runs a failed test once
+    │   │   └── RetryTransformer.java    Adds RetryAnalyzer to every test
     │   ├── pages/                       Page objects: locators + page actions
     │   │   ├── LoginPage.java
     │   │   ├── ProductsPage.java
@@ -87,9 +91,11 @@ selenium-testng-project/
     │       └── CartTest.java
     └── resources/
         └── config.properties            URL, username, password, headless flag
+
+screenshots/                             Created when a test fails (not committed to Git)
 ```
 
-A simple rule for the 4 packages:
+A simple rule for the 5 packages:
 
 | Package | Answers the question |
 |---------|----------------------|
@@ -97,6 +103,7 @@ A simple rule for the 4 packages:
 | `pages` | "**Where** is the element and **how** do I use it?" |
 | `tests` | "**What** am I testing and **what** should happen?" |
 | `data`  | "**Which inputs** should I try?" |
+| `listeners` | "What should happen **automatically** when a test starts, passes or fails?" |
 
 ---
 
@@ -113,7 +120,9 @@ A simple rule for the 4 packages:
 | 10 | `cartShowsCorrectProductTest` | CartTest | The cart contains exactly the added product | smoke, regression |
 
 **TestNG features used:** `@DataProvider` (in a separate class), `groups`, `dependsOnMethods`,
-all Before/After annotations (Suite, Test, Class, Method), and parallel execution.
+all Before/After annotations (Suite, Test, Class, Method), parallel execution,
+listeners (`ITestListener`, `ISuiteListener`) with a screenshot on failure, and automatic retry
+(`IRetryAnalyzer` + `IAnnotationTransformer`).
 
 ---
 
@@ -128,6 +137,9 @@ mvn clean test -Dgroups=regression      # all tests in the regression group
 mvn test -Dtest=LoginTest               # one class
 mvn test -Dtest=LoginTest#logoutTest    # one test method
 ```
+
+> **Note:** `-Dtest=...` makes Maven ignore `testng.xml`, so the **listeners are not active** in that run
+> (no screenshots, no retry). Use `mvn clean test` or `-Dgroups=...` when you need them.
 
 ### From IntelliJ IDEA / Eclipse / VS Code
 
@@ -163,7 +175,10 @@ The other files in the folder (`.css`, `.js`, `.png`) are only support files for
 |--------|---------|
 | **Passed** | All assertions were true |
 | **Failed** | An assertion was false or an exception happened – read the message and stack trace |
-| **Skipped** | Did not run – e.g. the method it depends on failed |
+| **Skipped** | Did not run – e.g. the method it depends on failed, **or** the attempt failed and is being retried |
+
+**Screenshots:** when a test fails, a screenshot of the browser at that moment is saved in
+`screenshots/<testName>_<timestamp>.png` in the project folder.
 
 **Stack trace tip:** read from the top and find the first line that mentions **your** package
 (`tests.` or `pages.`) – that's the line in your code where it broke.
@@ -415,6 +430,12 @@ makes no sense, so TestNG marks the test **SKIPPED** instead of reporting a seco
 
 ```xml
 <suite name="SauceDemo Test Suite" parallel="classes" thread-count="3">
+
+    <listeners>
+        <listener class-name="listeners.TestListener"/>
+        <listener class-name="listeners.RetryTransformer"/>
+    </listeners>
+
     <test name="SauceDemo UI Tests">
         <classes>
             <class name="tests.LoginTest"/>
@@ -442,6 +463,66 @@ Structure: **suite** → **test** → **classes** → `@Test` **methods**. The B
 | `testng` dependency (scope `test`) | TestNG, used only for tests |
 | `maven-compiler-plugin` | Compiles the Java code (as Java 11) |
 | `maven-surefire-plugin` | Runs TestNG with `testng.xml` when you type `mvn test` |
+
+### 8.10 Listeners – screenshot on failure and retry
+
+A **listener** is a class that TestNG calls **automatically** when something happens
+(suite starts, test passes, test fails…). Tests don't call it – it is registered once in `testng.xml`.
+
+**`TestListener.java`** implements two TestNG interfaces:
+
+| Method | Interface | When TestNG calls it | What it does here |
+|--------|-----------|----------------------|-------------------|
+| `onStart(ISuite)` | `ISuiteListener` | Suite starts | Prints "SUITE STARTED" |
+| `onFinish(ISuite)` | `ISuiteListener` | Suite ends | Prints "SUITE FINISHED" |
+| `onStart(ITestContext)` | `ITestListener` | A `<test>` tag starts | Prints "TEST STARTED" |
+| `onFinish(ITestContext)` | `ITestListener` | A `<test>` tag ends | Prints passed / failed / skipped counts |
+| `onTestStart` | `ITestListener` | Before each `@Test` | Prints "STARTED" |
+| `onTestSuccess` | `ITestListener` | A test passed | Prints "PASSED" |
+| `onTestFailure` | `ITestListener` | A test failed | Prints "FAILED" + error, **takes a screenshot** |
+| `onTestSkipped` | `ITestListener` | A test was skipped or is being retried | Prints "SKIPPED" |
+
+**How the screenshot works:**
+
+```java
+BaseTest testClass = (BaseTest) result.getInstance();   // the test object that failed
+WebDriver driver = testClass.getDriver();               // its browser
+File screenshot = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
+Files.copy(screenshot.toPath(), destination.toPath());  // save into screenshots/
+```
+
+The listener lives in another package, so it can't read the `protected driver` field directly –
+that's why `BaseTest` has a small public `getDriver()` method. `onTestFailure` runs **before**
+`@AfterMethod` closes the browser, so the screenshot shows the page at the moment of failure.
+
+**Retry – two small classes:**
+
+| Class | Interface | Job |
+|-------|-----------|-----|
+| `RetryAnalyzer` | `IRetryAnalyzer` | `retry()` returns `true` → TestNG runs the failed test again. Max **1** retry. |
+| `RetryTransformer` | `IAnnotationTransformer` | Adds `RetryAnalyzer` to **every** `@Test` while TestNG reads the annotations |
+
+Without the transformer, every test would need `@Test(retryAnalyzer = RetryAnalyzer.class)`.
+An `IAnnotationTransformer` must be registered in `testng.xml` (it can't be added with `@Listeners`),
+because it has to run *before* TestNG reads the `@Test` annotations.
+
+**What a failure looks like** (real run, with a test broken on purpose):
+
+```
+STARTED : cartShowsCorrectProductTest
+RETRYING: cartShowsCorrectProductTest (retry 1 of 1)
+SKIPPED : cartShowsCorrectProductTest        ← 1st attempt, retried
+STARTED : cartShowsCorrectProductTest
+FAILED  : cartShowsCorrectProductTest - expected [WRONG TITLE] but found [Your Cart]
+Screenshot saved: screenshots/cartShowsCorrectProductTest_1790967895195.png
+TEST FINISHED: SauceDemo UI Tests | Passed: 9 | Failed: 1 | Skipped: 1
+```
+
+The first attempt is reported as **SKIPPED**, the final attempt as **FAILED**, and only the final
+failure gets a screenshot. If the retry had passed, the test would count as **PASSED**.
+
+> Retry is a safety net for **flaky** tests (slow network, timing). It doesn't fix a real bug –
+> a real bug fails both times, like above.
 
 ---
 
@@ -533,6 +614,9 @@ If step 6 failed, TestNG would record **FAIL** with the message and stack trace 
 | Flaky test | Sometimes passes, sometimes fails, with no code change |
 | Thread | One "worker" running code; parallel = several threads at once |
 | ThreadLocal | A Java variable with a separate value for each thread |
+| Listener | A class TestNG calls automatically on events (test start, pass, fail…) |
+| Retry analyzer | Decides whether a failed test should run again |
+| Annotation transformer | Changes `@Test` annotations at runtime, before the tests run |
 
 ---
 

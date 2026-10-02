@@ -5,6 +5,14 @@
     Methods inside one class still run one after another, in the same thread.
 -->
 <suite name="SauceDemo Test Suite" parallel="classes" thread-count="3">
+
+    <listeners>
+        <!-- Logs test events and takes a screenshot when a test fails -->
+        <listener class-name="listeners.TestListener"/>
+        <!-- Adds RetryAnalyzer to every test (an IAnnotationTransformer must be registered here, not with @Listeners) -->
+        <listener class-name="listeners.RetryTransformer"/>
+    </listeners>
+
     <test name="SauceDemo UI Tests">
         <classes>
             <class name="tests.LoginTest"/>
