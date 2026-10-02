@@ -1,0 +1,13 @@
+# Maven build output (also contains surefire-reports)
+target/
+
+# TestNG reports generated when running from the IDE
+test-output/
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
