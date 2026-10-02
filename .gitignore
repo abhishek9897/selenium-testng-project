@@ -7,6 +7,9 @@ test-output/
 # Screenshots taken when a test fails
 screenshots/
 
+# Extent Report
+reports/
+
 # IDE files
 .idea/
 *.iml

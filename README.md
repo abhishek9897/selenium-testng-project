@@ -43,7 +43,7 @@ It logs in, adds a product to the cart, opens the cart, logs out… and after ea
 | Run only critical tests when needed | `smoke` and `regression` groups |
 | Test many inputs without copy-paste | `@DataProvider` – one test, 4 data rows |
 | Finish faster | 3 test classes run in parallel |
-| Clear results | TestNG built-in HTML and XML reports |
+| Clear results | Extent Report (with screenshots) + TestNG built-in HTML and XML reports |
 
 ---
 
@@ -56,6 +56,7 @@ It logs in, adds a product to the cart, opens the cart, logs out… and after ea
 | Google Chrome | Latest |
 | Selenium WebDriver | 4.50.0 (downloaded by Maven) |
 | TestNG | 7.12.0 (downloaded by Maven) |
+| Extent Reports | 5.1.2 (downloaded by Maven) |
 
 - **No ChromeDriver setup needed.** Selenium Manager (built into Selenium 4.6+) finds or downloads the matching driver automatically.
 - **Internet access** is needed to reach saucedemo.com and to download Maven dependencies.
@@ -78,7 +79,7 @@ selenium-testng-project/
     │   ├── data/
     │   │   └── LoginDataProvider.java   Test data for invalid logins
     │   ├── listeners/
-    │   │   ├── TestListener.java        Logs test events, screenshot on failure
+    │   │   ├── TestListener.java        Logs test events, Extent Report, screenshot on failure
     │   │   ├── RetryAnalyzer.java       Re-runs a failed test once
     │   │   └── RetryTransformer.java    Adds RetryAnalyzer to every test
     │   ├── pages/                       Page objects: locators + page actions
@@ -92,6 +93,7 @@ selenium-testng-project/
     └── resources/
         └── config.properties            URL, username, password, headless flag
 
+reports/ExtentReport.html                Extent Report, created on every run (not committed to Git)
 screenshots/                             Created when a test fails (not committed to Git)
 ```
 
@@ -121,7 +123,7 @@ A simple rule for the 5 packages:
 
 **TestNG features used:** `@DataProvider` (in a separate class), `groups`, `dependsOnMethods`,
 all Before/After annotations (Suite, Test, Class, Method), parallel execution,
-listeners (`ITestListener`, `ISuiteListener`) with a screenshot on failure, and automatic retry
+listeners (`ITestListener`, `ISuiteListener`) with a screenshot on failure, Extent Reports, and automatic retry
 (`IRetryAnalyzer` + `IAnnotationTransformer`).
 
 ---
@@ -154,7 +156,27 @@ and press **F10** line by line while watching Chrome. Don't add `Thread.sleep()`
 
 ## 6. Test reports
 
-TestNG creates its built-in reports automatically – no extra library is used.
+After every run you get **two kinds of reports**:
+
+1. **Extent Report** – a modern dashboard, created by our `TestListener`
+2. **TestNG default reports** – created automatically by TestNG itself
+
+### Extent Report
+
+Open **`reports/ExtentReport.html`** in a browser (it is in the project folder, not in `target/`).
+
+| What you see | Meaning |
+|--------------|---------|
+| Test list (left) | Every test with a **Pass / Fail / Skip** badge and its run time |
+| Test details (right) | Description, groups (`smoke` / `regression`), and each logged step |
+| Failed test | The error, stack trace and the **screenshot embedded in the report** |
+| DataProvider tests | Each data row listed separately, e.g. `invalidLoginTest [standard_user, wrong_password, ...]` |
+| Dashboard (chart icon) | Totals and pass/fail chart, plus system info (application, browser, Java) |
+
+It is **one HTML file** – the screenshots are stored inside it as Base64 text, so you can share the file on its own.
+It is overwritten on every run.
+
+### TestNG default reports
 
 | How you ran the tests | Report folder |
 |-----------------------|---------------|
@@ -177,8 +199,8 @@ The other files in the folder (`.css`, `.js`, `.png`) are only support files for
 | **Failed** | An assertion was false or an exception happened – read the message and stack trace |
 | **Skipped** | Did not run – e.g. the method it depends on failed, **or** the attempt failed and is being retried |
 
-**Screenshots:** when a test fails, a screenshot of the browser at that moment is saved in
-`screenshots/<testName>_<timestamp>.png` in the project folder.
+**Screenshots:** when a test fails, a screenshot of the browser at that moment is embedded in the
+Extent Report **and** saved as `screenshots/<testName>_<timestamp>.png` in the project folder.
 
 **Stack trace tip:** read from the top and find the first line that mentions **your** package
 (`tests.` or `pages.`) – that's the line in your code where it broke.
@@ -462,9 +484,10 @@ Structure: **suite** → **test** → **classes** → `@Test` **methods**. The B
 | `selenium-java` dependency | Selenium WebDriver library |
 | `testng` dependency (scope `test`) | TestNG, used only for tests |
 | `maven-compiler-plugin` | Compiles the Java code (as Java 11) |
+| `extentreports` dependency (scope `test`) | Extent Reports library for the HTML report |
 | `maven-surefire-plugin` | Runs TestNG with `testng.xml` when you type `mvn test` |
 
-### 8.10 Listeners – screenshot on failure and retry
+### 8.10 Listeners – Extent Report, screenshot on failure and retry
 
 A **listener** is a class that TestNG calls **automatically** when something happens
 (suite starts, test passes, test fails…). Tests don't call it – it is registered once in `testng.xml`.
@@ -473,23 +496,57 @@ A **listener** is a class that TestNG calls **automatically** when something hap
 
 | Method | Interface | When TestNG calls it | What it does here |
 |--------|-----------|----------------------|-------------------|
-| `onStart(ISuite)` | `ISuiteListener` | Suite starts | Prints "SUITE STARTED" |
-| `onFinish(ISuite)` | `ISuiteListener` | Suite ends | Prints "SUITE FINISHED" |
+| `onStart(ISuite)` | `ISuiteListener` | Suite starts | Prints "SUITE STARTED", **creates the Extent Report** |
+| `onFinish(ISuite)` | `ISuiteListener` | Suite ends | **`extent.flush()`** – writes the report file, prints "SUITE FINISHED" |
 | `onStart(ITestContext)` | `ITestListener` | A `<test>` tag starts | Prints "TEST STARTED" |
 | `onFinish(ITestContext)` | `ITestListener` | A `<test>` tag ends | Prints passed / failed / skipped counts |
-| `onTestStart` | `ITestListener` | Before each `@Test` | Prints "STARTED" |
-| `onTestSuccess` | `ITestListener` | A test passed | Prints "PASSED" |
-| `onTestFailure` | `ITestListener` | A test failed | Prints "FAILED" + error, **takes a screenshot** |
-| `onTestSkipped` | `ITestListener` | A test was skipped or is being retried | Prints "SKIPPED" |
+| `onTestStart` | `ITestListener` | Before each `@Test` | Prints "STARTED", creates the test entry in the Extent Report |
+| `onTestSuccess` | `ITestListener` | A test passed | Prints "PASSED", marks it **Pass** in the report |
+| `onTestFailure` | `ITestListener` | A test failed | Prints "FAILED", marks it **Fail**, **takes a screenshot** and adds it to the report |
+| `onTestSkipped` | `ITestListener` | A test was skipped or is being retried | Prints "SKIPPED", marks it **Skip** |
+
+**How the Extent Report is built:**
+
+```java
+// onStart(ISuite) - once
+ExtentSparkReporter spark = new ExtentSparkReporter("reports/ExtentReport.html");
+extent = new ExtentReports();
+extent.attachReporter(spark);
+
+// onTestStart - for every test
+ExtentTest test = extent.createTest(testName, description);
+extentTest.set(test);
+
+// onTestSuccess / onTestFailure / onTestSkipped
+extentTest.get().pass(...)  /  .fail(...)  /  .skip(...)
+
+// onFinish(ISuite) - once
+extent.flush();   // without this the report file stays empty
+```
+
+| Extent class | Meaning |
+|--------------|---------|
+| `ExtentSparkReporter` | The HTML file and its look (title, report name) |
+| `ExtentReports` | The whole report – one for the suite |
+| `ExtentTest` | One entry in the report – one per test run |
+
+**Why `ThreadLocal<ExtentTest>` here?** The listener is **one object shared by all threads**, and our
+3 test classes run in parallel. If `ExtentTest` were a normal field, thread 2 could overwrite it while
+thread 1 is still running, and a pass/fail would be written to the **wrong test**. `ThreadLocal` gives each
+thread its own "current test". (`BaseTest` doesn't need this – each test class has its own object.)
 
 **How the screenshot works:**
 
 ```java
 BaseTest testClass = (BaseTest) result.getInstance();   // the test object that failed
 WebDriver driver = testClass.getDriver();               // its browser
-File screenshot = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
-Files.copy(screenshot.toPath(), destination.toPath());  // save into screenshots/
+String base64 = ((TakesScreenshot) driver).getScreenshotAs(OutputType.BASE64);
+Files.write(destination.toPath(), Base64.getDecoder().decode(base64));   // PNG in screenshots/
+extentTest.get().fail("Screenshot at failure",
+        MediaEntityBuilder.createScreenCaptureFromBase64String(base64).build());   // into the report
 ```
+
+One screenshot is taken as Base64 text: it is decoded into a PNG file, and the same text is embedded in the Extent Report.
 
 The listener lives in another package, so it can't read the `protected driver` field directly –
 that's why `BaseTest` has a small public `getDriver()` method. `onTestFailure` runs **before**
@@ -517,6 +574,8 @@ FAILED  : cartShowsCorrectProductTest - expected [WRONG TITLE] but found [Your C
 Screenshot saved: screenshots/cartShowsCorrectProductTest_1790967895195.png
 TEST FINISHED: SauceDemo UI Tests | Passed: 9 | Failed: 1 | Skipped: 1
 ```
+
+In the Extent Report this appears as two entries: a **Skip** ("Failed, will be retried") and a **Fail** with the screenshot.
 
 The first attempt is reported as **SKIPPED**, the final attempt as **FAILED**, and only the final
 failure gets a screenshot. If the retry had passed, the test would count as **PASSED**.
@@ -617,6 +676,8 @@ If step 6 failed, TestNG would record **FAIL** with the message and stack trace 
 | Listener | A class TestNG calls automatically on events (test start, pass, fail…) |
 | Retry analyzer | Decides whether a failed test should run again |
 | Annotation transformer | Changes `@Test` annotations at runtime, before the tests run |
+| Extent Reports | Third-party library that builds an HTML dashboard report |
+| Base64 | A way to store an image (or any file) as plain text |
 
 ---
 
